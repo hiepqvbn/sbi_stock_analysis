@@ -1,0 +1,20 @@
+# Ignore all CSV files
+*.csv
+
+# Ignore SQLite database files
+*.db
+
+# Ignore Python bytecode files
+*.pyc
+
+# Ignore Jupyter Notebook
+*.ipynb
+.ipynb_checkpoints/
+# Ignore virtual environment directories
+venv/
+
+# Ignore uploads and data folders (if you store data there)
+*/__pycache__/
+uploads/
+data/
+download_csv/
