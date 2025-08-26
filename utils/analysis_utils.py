@@ -1,6 +1,41 @@
 import pandas as pd
 from typing import Dict, Any, Union
 import numpy as np
+import yfinance
+
+def get_stock_current_price(stock_code: str) -> float | None:
+    """
+    Fetch the latest stock price using yfinance.
+
+    Args:
+        stock_code: Stock code (str)
+
+    Returns:
+        Latest closing price (float) or 0 if not found/error
+    """
+    ticker = f"{stock_code}.T"
+    try:
+        today_price = yfinance.Ticker(ticker).history(period="1d")["Close"].iloc[0]
+        return float(today_price)
+    except Exception as e:
+        print(f"Warning: Failed to retrieve current price for {stock_code}: {e}")
+        return None
+
+def record_stock_split_adjustments(df: pd.DataFrame, stock_code) -> pd.DataFrame:
+    stock_df = df[df["stock_code"] == stock_code]
+    ticker = f"{stock_code}.T"
+    try:
+        splits = yfinance.Ticker(ticker).splits
+        if not splits.empty:
+            for split_date, split_ratio in splits.items():
+                stock_df.loc[pd.to_datetime(stock_df['date']).dt.tz_localize(
+                    'UTC') < split_date, 'quantity'] *= split_ratio
+                stock_df.loc[pd.to_datetime(stock_df['date']).dt.tz_localize(
+                    'UTC') < split_date, 'price_per_share'] /= split_ratio
+        return stock_df
+    except Exception as e:
+        print(f"Warning: Failed to retrieve stock splits: {e}")
+        return stock_df
 
 
 def analyze_stock_performance(
@@ -39,6 +74,8 @@ def analyze_stock_performance(
     # Sell stats
     total_sell_qty = stock_df.loc[sell_mask, 'quantity'].sum()
     total_sell_amount = stock_df.loc[sell_mask, 'total_amount'].sum()
+    avg_sell_price = (total_sell_amount /
+                      total_sell_qty) if total_sell_qty > 0 else 0
 
     # Realized profit (absolute and %)
     if total_buy_qty > 0:
@@ -62,12 +99,17 @@ def analyze_stock_performance(
     total_profit_pct = ((total_profit / (total_buy_qty *
                         avg_buy_price)) * 100) if total_buy_qty > 0 else 0
 
+    break_even_point_price = (
+        total_buy_amount - total_sell_amount) / holding_qty if holding_qty > 0 else 0
+    break_even_point_price = break_even_point_price if break_even_point_price > 0 else 0
+
     result = {
         "stock_code": stock_code,
         "stock_names": names_str,
         "total_buy_qty": int(total_buy_qty),
         "total_buy_amount": float(total_buy_amount),
         "avg_buy_price": float(avg_buy_price),
+        "avg_sell_price": float(avg_sell_price),
         "total_sell_qty": int(total_sell_qty),
         "total_sell_amount": float(total_sell_amount),
         "realized_profit": float(realized_profit),
@@ -78,6 +120,7 @@ def analyze_stock_performance(
         "total_profit_pct": float(total_profit_pct),
         "holding_qty": int(holding_qty),
         "holding_value": float(holding_value),
+        "break_even_point_price": float(break_even_point_price),
     }
 
     def compute_realized_profit(df):
@@ -208,9 +251,13 @@ def analyze_stock_performance(
         stock_df['avg_cost'] = np.nan
         stock_df['qty'] = np.nan
         stock_df['cash_flow'] = np.nan
+
+        stock_df['cumulative_profit'] = np.nan
+        stock_df['total_equity'] = np.nan
+
         stock_df['realized_step'] = np.nan
         stock_df['realized_pnl'] = np.nan
-        stock_df['unrealized_pnl'] = np.nan
+        stock_df['unrealized_profit'] = np.nan
         stock_df['total_pnl'] = np.nan
         stock_df['return_pct'] = np.nan
         # --- Running position & PnL using MOVING AVERAGE COST BASIS ---
@@ -219,10 +266,16 @@ def analyze_stock_performance(
         total_cost = 0.0  # book cost of current holdings = avg_cost * qty
         realized_pnl = 0.0
         cum_buys = 0.0   # total capital deployed (sum of buy cash outflows)
-        for _, r in stock_df.iterrows():
+        for i, r in stock_df.iterrows():
             action = r['trade_type']
             sh = r['quantity']
             px = r['price_per_share']
+            profit = r['total_amount']
+
+            if i > 0:
+                cumulative_profit = stock_df['cumulative_profit'].iloc[i - 1]
+            else:
+                cumulative_profit = 0.0
 
             if action == 'Buy':
                 # cash flow (negative = outflow)
@@ -239,6 +292,8 @@ def analyze_stock_performance(
                 total_cost = total_cost + px * sh
                 avg_cost = total_cost / new_qty
                 qty = new_qty
+
+                cumulative_profit -= profit
 
                 trade_realized = 0.0
 
@@ -258,6 +313,8 @@ def analyze_stock_performance(
                 total_cost = total_cost - avg_cost * sh
                 qty = qty - sh
 
+                cumulative_profit += profit
+
                 # if position closed, reset avg_cost + total_cost to clean state
                 if qty == 0:
                     avg_cost = 0.0
@@ -267,20 +324,25 @@ def analyze_stock_performance(
                 cash_flow = 0.0
 
             # At each step, compute unrealized at EXPECTED price (a what-if snapshot)
-            unrealized = (current_price - avg_cost) * qty if qty > 0 else 0.0
+            holding_value = stock_df['holding_value'].iloc[i]
+            unrealized = cumulative_profit + holding_value
+            total = realized_pnl + holding_value
             total_pnl = realized_pnl + unrealized
 
             # Return % relative to total deployed capital (guard divide by zero)
             ret_pct = (total_pnl / cum_buys * 100.0) if cum_buys > 0 else 0.0
 
-            stock_df['avg_cost'].iloc[_] = avg_cost if qty > 0 else None
-            stock_df['qty'].iloc[_] = qty
-            stock_df['cash_flow'].iloc[_] = cash_flow
-            stock_df['realized_step'].iloc[_] = trade_realized
-            stock_df['realized_pnl'].iloc[_] = realized_pnl
-            stock_df['unrealized_pnl'].iloc[_] = unrealized
-            stock_df['total_pnl'].iloc[_] = total_pnl
-            stock_df['return_pct'].iloc[_] = ret_pct
+            stock_df['avg_cost'].iloc[i] = avg_cost if qty > 0 else None
+            stock_df['qty'].iloc[i] = qty
+            stock_df['cash_flow'].iloc[i] = cash_flow
+            stock_df['realized_step'].iloc[i] = trade_realized
+            stock_df['realized_pnl'].iloc[i] = realized_pnl
+            stock_df['unrealized_profit'].iloc[i] = unrealized
+            stock_df['total_pnl'].iloc[i] = total_pnl
+            stock_df['return_pct'].iloc[i] = ret_pct
+
+            stock_df['cumulative_profit'].iloc[i] = cumulative_profit
+            stock_df['total_equity'].iloc[i] = total
 
         # Moving average cost (step-like line: avg changes only on BUY)
         fig_price.add_trace(go.Scatter(
@@ -330,27 +392,31 @@ def analyze_stock_performance(
         #     yaxis2=dict(title="Return (%)", overlaying="y", side="right"),
         #     template="plotly_white"
         # )
-        print(stock_df[[
-            "date", "trade_type", "quantity", "price_per_share","cash_flow"
-        ]].tail(3))  # Debug: print last few rows to verify
+        # print(stock_df[[
+        #     "date", "trade_type", "quantity", "price_per_share","cash_flow"
+        # ]].tail(3))  # Debug: print last few rows to verify
         fig_perf = go.Figure()
 
+        # Draw dash line at 0
+        fig_perf.add_hline(y=0, line_dash="dash", line_color="gray")
+
         # --- Cash flow bars ---
-        colors = ['red' if x < 0 else 'green' for x in stock_df['cash_flow']]  # buy=red, sell=green
+        # buy=red, sell=green
+        colors = ['red' if x < 0 else 'green' for x in stock_df['cash_flow']]
         fig_perf.add_trace(go.Bar(
             x=stock_df['date'],
             y=stock_df['cash_flow'],
             name='Cash Flow (buy=- / sell=+)',
             marker_color=colors,
-            opacity=0.7, 
+            opacity=0.7,
         ))
 
-        # --- Cumulative P&L line ---
+        # --- Cumulative Profit line ---
         fig_perf.add_trace(go.Scatter(
             x=stock_df['date'],
-            y=stock_df['total_pnl'],
+            y=stock_df['cumulative_profit'],
             mode='lines+markers',
-            name='Cumulative P&L (¥)',
+            name='Cumulative Profit (¥)',
             line=dict(color='blue'),
             yaxis='y1'
         ))
@@ -359,17 +425,47 @@ def analyze_stock_performance(
             x=stock_df['date'],
             y=stock_df['holding_value'],
             mode='lines+markers',
-            name='Holding Value'
+            name='Stock Holding Value (¥)',
+            line=dict(color='green'),
+            yaxis='y1'
         ))
-        # --- Return % line (secondary y-axis) ---
+        # --- Realize profit ---
         fig_perf.add_trace(go.Scatter(
             x=stock_df['date'],
-            y=stock_df['return_pct'],
+            y=stock_df['realized_profit'],
             mode='lines+markers',
-            name='Return (%)',
-            line=dict(color='orange'),
-            yaxis='y2'
+            name='Realized Profit (¥)',
+            line=dict(color='purple'),
+            yaxis='y1'
         ))
+
+        # --- Unrealized profit ---
+        fig_perf.add_trace(go.Scatter(
+            x=stock_df['date'],
+            y=stock_df['unrealized_profit'],
+            mode='lines+markers',
+            name='Unrealized Profit (¥)',
+            line=dict(color='orange'),
+            yaxis='y1'
+        ))
+        # --- Total equity ---
+        fig_perf.add_trace(go.Scatter(
+            x=stock_df['date'],
+            y=stock_df['total_equity'],
+            mode='lines+markers',
+            name='Total Equity (¥)',
+            line=dict(color='black'),
+            yaxis='y1'
+        ))
+        # --- Return % line (secondary y-axis) ---
+        # fig_perf.add_trace(go.Scatter(
+        #     x=stock_df['date'],
+        #     y=stock_df['return_pct'],
+        #     mode='lines+markers',
+        #     name='Return (%)',
+        #     line=dict(color='orange'),
+        #     yaxis='y2'
+        # ))
 
         # --- Layout ---
         fig_perf.update_layout(

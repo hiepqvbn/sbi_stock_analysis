@@ -1,9 +1,13 @@
 # data_handler/db_manager.py
+import os
 import sqlite3
 import pandas as pd
 
 
 def init_db(db_path="data/portfolio.db"):
+    # make dir if data/ folder is not exist
+    if not os.path.exists(os.path.dirname(db_path)):
+        os.makedirs(os.path.dirname(db_path))
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
     c.execute("""

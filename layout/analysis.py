@@ -16,8 +16,8 @@ def get_layout():
                       placeholder="Enter expected price", style={"marginLeft": "10px"}),
         ], style={"marginBottom": "24px"}),
         html.Div(id="stock-metrics", style={"marginBottom": "24px"}),
-        dcc.Graph(id="stock-price-graph", style={"marginBottom": "24px"}),
         dcc.Graph(id="stock-indicators-graph"),
+        dcc.Graph(id="stock-price-graph", style={"marginBottom": "24px"}),
         html.H4("Transaction Records"),
         html.Div(id="analysis-stock-table"),
     ])
