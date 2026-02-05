@@ -42,5 +42,29 @@ Currently designed for Japan-only formats.
 - Only SBI Securities Japan CSV format is supported.
 - See `.gitignore` for excluded files/folders.
 
+## Refactor & Performance
+
+- Moved small UI helper functions (`yen`, `pct`) to `core/formatting.py` for reuse across callbacks.
+- Improved price fetching cache in `core/prices.py` to merge results and use a longer TTL to reduce repeated yfinance requests and improve dashboard responsiveness.
+- These changes aim to reduce lag when interacting with the dashboard by avoiding redundant network calls.
+
+## Tests
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run unit tests:
+
+```bash
+pytest -q
+```
+
+Notes:
+- Tests are focused on core logic (ledger, dates, pricing guards).
+- Network calls are avoided in tests.
+
 ## License
 MIT License

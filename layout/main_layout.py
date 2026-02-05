@@ -2,14 +2,16 @@
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 
+from core.constants import UI
+
 def get_main_layout():
     sidebar = dbc.Nav(
         [
-            dbc.NavLink("Dashboard", href="/", active="exact"),
-            dbc.NavLink("Analysis", href="/analysis", active="exact"),
-            dbc.NavLink("Data Record", href="/data", active="exact"),
-            dbc.NavLink("Upload Data", href="/upload", active="exact"),
-            dbc.NavLink("Settings", href="/settings", active="exact"),
+            dbc.NavLink(UI.NAV_DASHBOARD, href="/", active="exact"),
+            dbc.NavLink(UI.NAV_ANALYSIS, href="/analysis", active="exact"),
+            dbc.NavLink(UI.NAV_DATA_RECORD, href="/data", active="exact"),
+            dbc.NavLink(UI.NAV_UPLOAD, href="/upload", active="exact"),
+            dbc.NavLink(UI.NAV_SETTINGS, href="/settings", active="exact"),
         ],
         vertical=True,
         pills=True,

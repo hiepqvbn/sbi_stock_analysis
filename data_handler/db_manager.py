@@ -3,6 +3,8 @@ import os
 import sqlite3
 import pandas as pd
 
+from core.constants import Columns
+
 
 def init_db(db_path="data/portfolio.db"):
     # make dir if data/ folder is not exist
@@ -70,10 +72,10 @@ def insert_new_rows(df, db_path="data/portfolio.db"):
 
     for _, row in df.iterrows():
         try:
-            date_str = row["date"].strftime(
-                "%Y-%m-%d") if not pd.isna(row["date"]) else None
-            settlement_str = row["settlement_date"].strftime(
-                "%Y-%m-%d") if not pd.isna(row["settlement_date"]) else None
+            date_str = row[Columns.DATE].strftime(
+                "%Y-%m-%d") if not pd.isna(row[Columns.DATE]) else None
+            settlement_str = row[Columns.SETTLEMENT_DATE].strftime(
+                "%Y-%m-%d") if not pd.isna(row[Columns.SETTLEMENT_DATE]) else None
 
             c.execute("""
                 INSERT INTO trades (date, stock_code, stock_name, trade_type, quantity,
@@ -81,12 +83,12 @@ def insert_new_rows(df, db_path="data/portfolio.db"):
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 date_str,
-                row["stock_code"],
-                row["stock_name"],
-                row["trade_type"],
-                int(row["quantity"]),
-                float(row["price_per_share"]),
-                float(row["total_amount"]),
+                row[Columns.STOCK_CODE],
+                row[Columns.STOCK_NAME],
+                row[Columns.TRADE_TYPE],
+                int(row[Columns.QUANTITY]),
+                float(row[Columns.PRICE_PER_SHARE]),
+                float(row[Columns.TOTAL_AMOUNT]),
                 settlement_str
             ))
         except sqlite3.IntegrityError:
@@ -102,14 +104,14 @@ def insert_fundamentals(df, db_path="data/portfolio.db"):
 
     for _, row in df.iterrows():
         try:
-            date_str = row["date"].strftime(
-                "%Y-%m-%d") if not pd.isna(row["date"]) else None
+            date_str = row[Columns.DATE].strftime(
+                "%Y-%m-%d") if not pd.isna(row[Columns.DATE]) else None
 
             c.execute("""
                 INSERT INTO fundamentals (stock_code, date, pe_ratio, eps)
                 VALUES (?, ?, ?, ?)
             """, (
-                row["stock_code"],
+                row[Columns.STOCK_CODE],
                 date_str,
                 float(row["pe_ratio"]) if not pd.isna(row["pe_ratio"]) else None,
                 float(row["eps"]) if not pd.isna(row["eps"]) else None
@@ -228,15 +230,15 @@ def insert_transactions(df, db_path="data/portfolio.db"):
                     price_per_share, total_amount, settlement_date, fee
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                row["date"].strftime("%Y-%m-%d") if not pd.isna(row["date"]) else None,
-                row["stock_code"],
-                row["stock_name"],
-                row["trade_type"],
-                safe_int(row["quantity"]),
-                safe_float(row["price_per_share"]),
-                safe_float(row["total_amount"]),
-                row["settlement_date"].strftime("%Y-%m-%d") if not pd.isna(row["settlement_date"]) else None,
-                safe_float(row["fee"]) if "fee" in row else 0
+                row[Columns.DATE].strftime("%Y-%m-%d") if not pd.isna(row[Columns.DATE]) else None,
+                row[Columns.STOCK_CODE],
+                row[Columns.STOCK_NAME],
+                row[Columns.TRADE_TYPE],
+                safe_int(row[Columns.QUANTITY]),
+                safe_float(row[Columns.PRICE_PER_SHARE]),
+                safe_float(row[Columns.TOTAL_AMOUNT]),
+                row[Columns.SETTLEMENT_DATE].strftime("%Y-%m-%d") if not pd.isna(row[Columns.SETTLEMENT_DATE]) else None,
+                safe_float(row[Columns.FEE]) if Columns.FEE in row else 0
             ))
         except sqlite3.IntegrityError as e:
             # print(f"IntegrityError: {e} for row: {row.to_dict()}")

@@ -3,6 +3,7 @@ import base64
 import io
 from data_handler.csv_parser import clean_sbi_csv  # your parser
 from data_handler.db_manager import insert_transactions
+from core.constants import UI, TabValues
 
 @callback(
     Output("upload-section", "children"),
@@ -10,16 +11,16 @@ from data_handler.db_manager import insert_transactions
 )
 def render_upload_section(tab):
     label_map = {
-        "transactions": "Upload Transactions CSV",
-        "dividends": "Upload Dividends CSV",
-        "cash_flows": "Upload Cash Flows CSV",
-        "stock_splits": "Upload Stock Splits CSV"
+        TabValues.TRANSACTIONS: UI.UPLOAD_LABEL_TRANSACTIONS,
+        TabValues.DIVIDENDS: UI.UPLOAD_LABEL_DIVIDENDS,
+        TabValues.CASH_FLOWS: UI.UPLOAD_LABEL_CASH_FLOWS,
+        TabValues.STOCK_SPLITS: UI.UPLOAD_LABEL_STOCK_SPLITS,
     }
     return html.Div([
         html.H4(label_map[tab]),
         dcc.Upload(
             id=f"upload-{tab}",
-            children=html.Div(["Drag and Drop or ", html.A("Select CSV File")]),
+            children=html.Div([UI.UPLOAD_DROP, html.A(UI.UPLOAD_SELECT)]),
             style={
                 "width": "100%", "height": "60px", "lineHeight": "60px",
                 "borderWidth": "1px", "borderStyle": "dashed",
@@ -43,6 +44,6 @@ def handle_upload_transactions(contents, filename):
         file_buffer = io.StringIO(decoded.decode('shift_jis'))  # or utf-8 if needed
         df = clean_sbi_csv(file_buffer)  # Clean and return DataFrame
         insert_transactions(df)          # Insert DataFrame into DB
-        return f"Uploaded and inserted {len(df)} transactions from: {filename}"
+        return f"{UI.UPLOAD_SUCCESS_PREFIX} {len(df)} transactions from: {filename}"
     except Exception as e:
-        return f"❌ Error processing file {filename}: {e}"
+        return f"{UI.UPLOAD_ERROR_PREFIX} {filename}: {e}"
