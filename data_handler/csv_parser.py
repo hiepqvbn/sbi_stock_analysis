@@ -138,6 +138,17 @@ def clean_sbi_cash_flow_csv(filepath_or_buffer, encoding="utf-8-sig"):
     df["currency"] = "JPY"
     df["notes"] = df["description"]
 
+    # Combine same-day cash movements to avoid duplicate rows from identical deposits
+    agg_keys = ["date", "type", "source", "category", "description", "currency", "notes"]
+    num_cols = ["debit", "credit", "transfer_debit", "transfer_credit", "amount"]
+    for col in num_cols:
+        if col not in df.columns:
+            df[col] = 0
+    df = (
+        df.groupby(agg_keys, as_index=False)[num_cols]
+        .sum()
+    )
+
     return df
 
 

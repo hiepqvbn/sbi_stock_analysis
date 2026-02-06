@@ -17,6 +17,7 @@ class Columns:
     ACCOUNT = "account"
     TAX = "tax"
     TAX_AMOUNT = "tax_amount"
+    NET_DEPOSIT = "net_deposit"
 
     # snapshot/ledger fields
     QTY = "qty"
@@ -96,6 +97,7 @@ class UI:
     BENCHMARK = "Benchmark"
     BENCHMARK_NONE = "None"
     BENCHMARK_SP500 = "S&P 500 (SPY)"
+    BENCHMARK_NIKKEI500 = "Nikkei 500"
     STOCK_PERF_TITLE = "Stock Performance"
     TAB_REALIZED = "Realized PnL"
     TAB_TOTAL = "Total PnL"

@@ -141,17 +141,7 @@ def get_layout() -> html.Div:
                         style={"flex": "1"},
                     ),
                     html.Div(
-                        [
-                            html.Div(UI.NET_DEPOSIT, style={
-                                     "marginBottom": "6px"}),
-                            dcc.Input(
-                                id="dashboard-initial-capital",
-                                type="number",
-                                value=3500000,
-                                placeholder=UI.NET_DEPOSIT_PLACEHOLDER,
-                                style={"width": "180px"},
-                            ),
-                        ],
+                        [],
                         style={"minWidth": "220px"},
                     ),
                 ],
@@ -274,19 +264,41 @@ def get_layout() -> html.Div:
             ),
             html.Div(
                 [
-                    _kpi_card(KPI.MARKET_VALUE,
-                              "dashboard-kpi-market-value", "¥0"),
-                    _kpi_card(KPI.TOTAL_PNL, "dashboard-kpi-total-pnl", "¥0"),
-                    _kpi_card("Account Growth / Capital Return",
-                              "dashboard-kpi-return-pct", "0.00% / 0.00%"),
-                    _kpi_card(KPI.IRR, "dashboard-kpi-irr", "0.00%"),
-                    _kpi_card(KPI.TWR_ANNUAL, "dashboard-kpi-twr", "0.00% / 0.00%"),
-                    _kpi_card(KPI.REALIZED_UNREALIZED,
-                              "dashboard-kpi-split", "¥0 / ¥0"),
+                    _kpi_group_card(
+                        "Value",
+                        [
+                            ("Holding Value", "dashboard-kpi-market-value", "¥0"),
+                            ("Net Value", "dashboard-kpi-net-value", "¥0"),
+                            ("Cash", "dashboard-kpi-cash", "¥0"),
+                        ],
+                    ),
+                    _kpi_group_card(
+                        "Cash Flows",
+                        [
+                            ("Net Deposit", "dashboard-net-deposit-value", "¥0"),
+                            ("Dividends", "dashboard-dividend-value", "¥0"),
+                            ("Tax", "dashboard-tax-value", "¥0"),
+                        ],
+                    ),
+                    _kpi_group_card(
+                        "Profit & Growth",
+                        [
+                            ("Total PnL", "dashboard-kpi-total-pnl", "¥0"),
+                            ("Realized", "dashboard-kpi-realized", "¥0"),
+                            ("Growth %", "dashboard-kpi-growth", "0.00%"),
+                        ],
+                    ),
+                    _kpi_group_card(
+                        "Returns",
+                        [
+                            ("IRR", "dashboard-kpi-irr", "0.00%"),
+                            ("TWR / Ann.", "dashboard-kpi-twr", "0.00% / 0.00%"),
+                        ],
+                    ),
                 ],
                 style={
                     "display": "grid",
-                    "gridTemplateColumns": "repeat(6, minmax(0, 1fr))",
+                    "gridTemplateColumns": "repeat(4, minmax(0, 1fr))",
                     "gap": "12px",
                     "marginBottom": "16px",
                 },
@@ -325,9 +337,10 @@ def get_layout() -> html.Div:
                                                 id="dashboard-benchmark",
                                                 options=[
                                                     {"label": UI.BENCHMARK_NONE, "value": ""},
-                                                    {"label": UI.BENCHMARK_SP500, "value": "^GSPC"},
+                                                    {"label": UI.BENCHMARK_SP500, "value": "SPY"},
+                                                    {"label": UI.BENCHMARK_NIKKEI500, "value": "^N500"},
                                                 ],
-                                                value="",
+                                                value="SPY",
                                                 clearable=False,
                                                 style={"width": "220px"},
                                             ),
@@ -511,6 +524,33 @@ def _kpi_card(title: str, value_id: str, default_value: str) -> html.Div:
                 id=value_id,
                 style={"fontSize": "22px",
                        "fontWeight": "700", "marginTop": "6px"},
+            ),
+        ],
+        style={
+            "padding": "12px 14px",
+            "borderRadius": "14px",
+            "border": "1px solid #eee",
+            "background": "white",
+            "boxShadow": "0 1px 2px rgba(0,0,0,0.04)",
+        },
+    )
+
+
+def _kpi_group_card(title: str, rows: list[tuple[str, str, str]]) -> html.Div:
+    return html.Div(
+        [
+            html.Div(title, style={"opacity": "0.7", "fontSize": "12px"}),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Div(label, style={"opacity": "0.7", "fontSize": "11px"}),
+                            html.Div(default_value, id=value_id, style={"fontWeight": "700"}),
+                        ],
+                        style={"display": "flex", "justifyContent": "space-between", "marginTop": "8px"},
+                    )
+                    for label, value_id, default_value in rows
+                ]
             ),
         ],
         style={

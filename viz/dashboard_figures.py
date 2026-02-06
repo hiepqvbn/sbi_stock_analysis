@@ -88,7 +88,18 @@ def fig_asset_growth(
     x = pd.to_datetime(asset_df[Columns.DATE])
 
     if view_mode == "return":
-        if net_deposit and Columns.NET_VALUE in asset_df.columns:
+        if Columns.NET_VALUE in asset_df.columns and Columns.NET_DEPOSIT in asset_df.columns:
+            denom = asset_df[Columns.NET_DEPOSIT].replace(0, pd.NA)
+            net_ret = (asset_df[Columns.NET_VALUE] - asset_df[Columns.NET_DEPOSIT]) / denom * 100.0
+            net_ret = net_ret.fillna(0.0)
+            fig.add_trace(go.Scatter(
+                x=x,
+                y=net_ret,
+                mode="lines",
+                name="Net Return %",
+                hovertemplate="%{x|%Y-%m-%d}<br>Return: %{y:.2f}%<extra></extra>",
+            ))
+        elif net_deposit and Columns.NET_VALUE in asset_df.columns:
             net_ret = (asset_df[Columns.NET_VALUE] - float(net_deposit)) / float(net_deposit) * 100.0
             fig.add_trace(go.Scatter(
                 x=x,
@@ -121,7 +132,7 @@ def fig_asset_growth(
         fig.add_trace(go.Scatter(
             x=x,
             y=asset_df[Columns.MARKET_VALUE],
-            mode="lines+markers",
+            mode="lines",
             name="Holdings Value",
             hovertemplate="%{x|%Y-%m-%d}<br>Value: ¥%{y:,.0f}<extra></extra>",
         ))
@@ -130,12 +141,23 @@ def fig_asset_growth(
             fig.add_trace(go.Scatter(
                 x=x,
                 y=asset_df[Columns.NET_VALUE],
-                mode="lines+markers",
+                mode="lines",
                 name="Net Value",
                 hovertemplate="%{x|%Y-%m-%d}<br>Net: ¥%{y:,.0f}<extra></extra>",
             ))
 
-        if net_deposit is not None:
+        if Columns.NET_DEPOSIT in asset_df.columns:
+            fig.add_trace(go.Scatter(
+                x=x,
+                y=asset_df[Columns.NET_DEPOSIT],
+                mode="lines",
+                name="Net Deposits",
+                line={"width": 1},
+                fill="tozeroy",
+                fillcolor="rgba(46, 204, 113, 0.12)",
+                hovertemplate="%{x|%Y-%m-%d}<br>Net Deposits: ¥%{y:,.0f}<extra></extra>",
+            ))
+        elif net_deposit is not None:
             fig.add_hline(
                 y=float(net_deposit),
                 line_dash="dash",

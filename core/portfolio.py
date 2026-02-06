@@ -14,6 +14,7 @@ def build_portfolio_value_timeseries(
     transactions_df: pd.DataFrame,
     price_map: Optional[Dict[str, float]] = None,
     as_of_date: Optional[str] = None,
+    cash_flows_df: Optional[pd.DataFrame] = None,
     net_deposit: float = 0.0,
 ) -> pd.DataFrame:
     """
@@ -38,33 +39,60 @@ def build_portfolio_value_timeseries(
     last_price_by_code: Dict[str, float] = {}
     rows = []
     net_cash_flow = 0.0
+    cash_flow_total = 0.0
+    net_deposit_cum = float(net_deposit or 0.0)
 
-    for _, r in df.iterrows():
-        code = str(r[Columns.STOCK_CODE])
-        trade_type = str(r[Columns.TRADE_TYPE])
-        qty = float(r[Columns.QUANTITY])
-        price = float(r[Columns.PRICE_PER_SHARE])
-        date = r[Columns.DATE]
+    cash_flow_by_date = None
+    net_deposit_by_date = None
+    if cash_flows_df is not None and not cash_flows_df.empty:
+        cf = cash_flows_df.copy()
+        cf[Columns.DATE] = to_dt(cf[Columns.DATE])
+        if as_of_date:
+            as_of_dt = pd.to_datetime(as_of_date, errors="coerce")
+            if not pd.isna(as_of_dt):
+                cf = cf[cf[Columns.DATE] <= as_of_dt]
+        cf["amount"] = pd.to_numeric(cf["amount"], errors="coerce").fillna(0.0)
+        cf["type"] = cf["type"].astype(str)
+        cash_flow_by_date = cf.groupby(Columns.DATE)["amount"].sum()
+        net_deposit_by_date = cf[cf["type"].isin(["Deposit", "Withdrawal"])].groupby(Columns.DATE)["amount"].sum()
 
-        amount = r.get(Columns.TOTAL_AMOUNT, 0)
-        fee_val = r.get(Columns.FEE, 0)
-        try:
-            amount = float(amount) if amount is not None else 0.0
-        except Exception:
-            amount = 0.0
-        try:
-            fee_val = float(fee_val) if fee_val is not None else 0.0
-        except Exception:
-            fee_val = 0.0
+    dates = set(df[Columns.DATE].tolist())
+    if cash_flow_by_date is not None:
+        dates.update(cash_flow_by_date.index.tolist())
+    dates = sorted(dates)
 
-        if trade_type == TradeType.BUY:
-            qty_by_code[code] = qty_by_code.get(code, 0.0) + qty
-            net_cash_flow -= (amount + fee_val)
-        elif trade_type == TradeType.SELL:
-            qty_by_code[code] = qty_by_code.get(code, 0.0) - qty
-            net_cash_flow += (amount - fee_val)
+    for date in dates:
+        g = df[df[Columns.DATE] == date]
+        for _, r in g.iterrows():
+            code = str(r[Columns.STOCK_CODE])
+            trade_type = str(r[Columns.TRADE_TYPE])
+            qty = float(r[Columns.QUANTITY])
+            price = float(r[Columns.PRICE_PER_SHARE])
 
-        last_price_by_code[code] = price
+            amount = r.get(Columns.TOTAL_AMOUNT, 0)
+            fee_val = r.get(Columns.FEE, 0)
+            try:
+                amount = float(amount) if amount is not None else 0.0
+            except Exception:
+                amount = 0.0
+            try:
+                fee_val = float(fee_val) if fee_val is not None else 0.0
+            except Exception:
+                fee_val = 0.0
+
+            if trade_type == TradeType.BUY:
+                qty_by_code[code] = qty_by_code.get(code, 0.0) + qty
+                net_cash_flow -= (amount + fee_val)
+            elif trade_type == TradeType.SELL:
+                qty_by_code[code] = qty_by_code.get(code, 0.0) - qty
+                net_cash_flow += (amount - fee_val)
+
+            last_price_by_code[code] = price
+
+        if cash_flow_by_date is not None:
+            cash_flow_total += float(cash_flow_by_date.get(date, 0.0))
+        if net_deposit_by_date is not None:
+            net_deposit_cum += float(net_deposit_by_date.get(date, 0.0))
 
         holdings_value = 0.0
         for c, q in qty_by_code.items():
@@ -75,18 +103,22 @@ def build_portfolio_value_timeseries(
                 continue
             holdings_value += q * px
 
-        net_value = float(net_deposit) + net_cash_flow + float(holdings_value)
+        net_value = net_cash_flow + cash_flow_total + float(holdings_value)
         rows.append({
             Columns.DATE: date,
             Columns.MARKET_VALUE: float(holdings_value),
             Columns.NET_VALUE: float(net_value),
+            Columns.NET_DEPOSIT: float(net_deposit_cum),
         })
 
     out = pd.DataFrame(rows)
     if out.empty:
         return out
 
-    out = out.groupby(Columns.DATE, as_index=False)[[Columns.MARKET_VALUE, Columns.NET_VALUE]].last()
+    out = out.groupby(
+        Columns.DATE,
+        as_index=False,
+    )[[Columns.MARKET_VALUE, Columns.NET_VALUE, Columns.NET_DEPOSIT]].last()
 
     # optional as-of point using provided price_map
     if price_map:
@@ -99,12 +131,17 @@ def build_portfolio_value_timeseries(
             if px is None:
                 continue
             holdings_value += q * px
-        net_value = float(net_deposit) + net_cash_flow + float(holdings_value)
+        net_value = net_cash_flow + cash_flow_total + float(holdings_value)
         out = pd.concat(
             [
                 out,
                 pd.DataFrame(
-                    [{Columns.DATE: as_of, Columns.MARKET_VALUE: float(holdings_value), Columns.NET_VALUE: float(net_value)}]
+                    [{
+                        Columns.DATE: as_of,
+                        Columns.MARKET_VALUE: float(holdings_value),
+                        Columns.NET_VALUE: float(net_value),
+                        Columns.NET_DEPOSIT: float(net_deposit_cum),
+                    }]
                 ),
             ],
             ignore_index=True,
@@ -213,40 +250,58 @@ def compute_irr(
     transactions_df: pd.DataFrame,
     ending_value: float,
     net_deposit: float,
+    cash_flows_df: Optional[pd.DataFrame] = None,
+    as_of_date: Optional[str] = None,
 ) -> float:
-    if transactions_df is None or transactions_df.empty:
+    if (transactions_df is None or transactions_df.empty) and (cash_flows_df is None or cash_flows_df.empty):
         return 0.0
 
-    df = transactions_df.copy()
-    df = stocks_split_adjustments(df)
-    df[Columns.DATE] = to_dt(df[Columns.DATE])
-    df = df.sort_values([Columns.DATE, "id"] if "id" in df.columns else [Columns.DATE])
-
     cashflows: list[tuple[pd.Timestamp, float]] = []
-    if net_deposit:
-        cashflows.append((pd.to_datetime(df[Columns.DATE].min()), -float(net_deposit)))
+    if cash_flows_df is not None and not cash_flows_df.empty:
+        cf = cash_flows_df.copy()
+        cf[Columns.DATE] = to_dt(cf[Columns.DATE])
+        if as_of_date:
+            as_of_dt = pd.to_datetime(as_of_date, errors="coerce")
+            if not pd.isna(as_of_dt):
+                cf = cf[cf[Columns.DATE] <= as_of_dt]
+        cf["amount"] = pd.to_numeric(cf["amount"], errors="coerce").fillna(0.0)
+        # cash_flows are from account perspective; invert to investor perspective for IRR
+        for _, r in cf.iterrows():
+            cashflows.append((pd.to_datetime(r[Columns.DATE]), -float(r["amount"])))
+        if as_of_date:
+            last_date = pd.to_datetime(as_of_date)
+        else:
+            last_date = pd.to_datetime(cf[Columns.DATE].max())
+        cashflows.append((last_date, float(ending_value)))
+    else:
+        df = transactions_df.copy()
+        df = stocks_split_adjustments(df)
+        df[Columns.DATE] = to_dt(df[Columns.DATE])
+        df = df.sort_values([Columns.DATE, "id"] if "id" in df.columns else [Columns.DATE])
 
-    for _, r in df.iterrows():
-        d = pd.to_datetime(r[Columns.DATE])
-        amt = r.get(Columns.TOTAL_AMOUNT, 0) or 0
-        fee = r.get(Columns.FEE, 0) or 0
-        try:
-            amt = float(amt)
-        except Exception:
-            amt = 0.0
-        try:
-            fee = float(fee)
-        except Exception:
-            fee = 0.0
+        if net_deposit:
+            cashflows.append((pd.to_datetime(df[Columns.DATE].min()), -float(net_deposit)))
 
-        if r[Columns.TRADE_TYPE] == TradeType.BUY:
-            cashflows.append((d, -(amt + fee)))
-        elif r[Columns.TRADE_TYPE] == TradeType.SELL:
-            cashflows.append((d, amt - fee))
+        for _, r in df.iterrows():
+            d = pd.to_datetime(r[Columns.DATE])
+            amt = r.get(Columns.TOTAL_AMOUNT, 0) or 0
+            fee = r.get(Columns.FEE, 0) or 0
+            try:
+                amt = float(amt)
+            except Exception:
+                amt = 0.0
+            try:
+                fee = float(fee)
+            except Exception:
+                fee = 0.0
 
-    # ending value as final inflow
-    last_date = pd.to_datetime(df[Columns.DATE].max())
-    cashflows.append((last_date, float(ending_value)))
+            if r[Columns.TRADE_TYPE] == TradeType.BUY:
+                cashflows.append((d, -(amt + fee)))
+            elif r[Columns.TRADE_TYPE] == TradeType.SELL:
+                cashflows.append((d, amt - fee))
+
+        last_date = pd.to_datetime(as_of_date) if as_of_date else pd.to_datetime(df[Columns.DATE].max())
+        cashflows.append((last_date, float(ending_value)))
 
     irr = _xirr(cashflows)
     return (irr * 100.0) if irr is not None else 0.0
@@ -256,10 +311,47 @@ def compute_twr(
     transactions_df: pd.DataFrame,
     price_map: Dict[str, float],
     net_deposit: float,
+    cash_flows_df: Optional[pd.DataFrame] = None,
     as_of_date: Optional[str] = None,
 ) -> float:
     if transactions_df is None or transactions_df.empty:
         return 0.0
+
+    if cash_flows_df is not None and not cash_flows_df.empty:
+        asset_df = build_portfolio_value_timeseries(
+            transactions_df,
+            price_map=price_map,
+            as_of_date=as_of_date,
+            cash_flows_df=cash_flows_df,
+        )
+        if asset_df is None or asset_df.empty or Columns.NET_VALUE not in asset_df.columns:
+            return 0.0
+
+        cf = cash_flows_df.copy()
+        cf[Columns.DATE] = to_dt(cf[Columns.DATE])
+        if as_of_date:
+            as_of_dt = pd.to_datetime(as_of_date, errors="coerce")
+            if not pd.isna(as_of_dt):
+                cf = cf[cf[Columns.DATE] <= as_of_dt]
+        cf["amount"] = pd.to_numeric(cf["amount"], errors="coerce").fillna(0.0)
+        cash_flow_by_date = cf.groupby(Columns.DATE)["amount"].sum()
+
+        asset_df = asset_df.sort_values(Columns.DATE)
+        prev_value = None
+        twr = 1.0
+        for _, r in asset_df.iterrows():
+            date = pd.to_datetime(r[Columns.DATE])
+            end_value = float(r[Columns.NET_VALUE])
+            if prev_value is None:
+                prev_value = end_value
+                continue
+            cash_flow = float(cash_flow_by_date.get(date, 0.0))
+            if prev_value > 0:
+                period_return = (end_value - cash_flow) / prev_value - 1.0
+                twr *= (1.0 + period_return)
+            prev_value = end_value
+
+        return (twr - 1.0) * 100.0
 
     df = transactions_df.copy()
     df = stocks_split_adjustments(df)
