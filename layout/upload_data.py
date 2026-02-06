@@ -7,9 +7,7 @@ def get_layout():
         html.H2(UI.UPLOAD_DATA_TITLE),
         dcc.Tabs(id="upload-type-tabs", value=TabValues.TRANSACTIONS, children=[
             dcc.Tab(label=UI.TAB_TRANSACTIONS, value=TabValues.TRANSACTIONS),
-            dcc.Tab(label=UI.TAB_DIVIDENDS, value=TabValues.DIVIDENDS),
             dcc.Tab(label=UI.TAB_CASH_FLOWS, value=TabValues.CASH_FLOWS),
-            dcc.Tab(label=UI.TAB_STOCK_SPLITS, value=TabValues.STOCK_SPLITS),
         ]),
         html.Div(id="upload-section"),
     ])

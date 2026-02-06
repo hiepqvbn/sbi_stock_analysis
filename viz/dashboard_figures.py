@@ -73,41 +73,81 @@ def fig_top_pnl_bar(snapshot_df: pd.DataFrame, kind: str = "unrealized", top_n: 
     return fig
 
 
-def fig_asset_growth(asset_df: pd.DataFrame, initial_capital: float | None = None) -> go.Figure:
+def fig_asset_growth(
+    asset_df: pd.DataFrame,
+    net_deposit: float | None = None,
+    view_mode: str = "value",
+    benchmark_df: pd.DataFrame | None = None,
+    twr_pct: float | None = None,
+) -> go.Figure:
     fig = go.Figure()
     if asset_df is None or asset_df.empty:
         fig.update_layout(template="plotly_white", title=UI.ASSET_GROWTH_TITLE)
         return fig
 
-    fig.add_trace(go.Scatter(
-        x=pd.to_datetime(asset_df[Columns.DATE]),
-        y=asset_df[Columns.MARKET_VALUE],
-        mode="lines+markers",
-        name="Holdings Value",
-        hovertemplate="%{x|%Y-%m-%d}<br>Value: ¥%{y:,.0f}<extra></extra>",
-    ))
+    x = pd.to_datetime(asset_df[Columns.DATE])
 
-    if Columns.NET_VALUE in asset_df.columns:
+    if view_mode == "return":
+        if net_deposit and Columns.NET_VALUE in asset_df.columns:
+            net_ret = (asset_df[Columns.NET_VALUE] - float(net_deposit)) / float(net_deposit) * 100.0
+            fig.add_trace(go.Scatter(
+                x=x,
+                y=net_ret,
+                mode="lines+markers",
+                name="Net Return %",
+                hovertemplate="%{x|%Y-%m-%d}<br>Return: %{y:.2f}%<extra></extra>",
+            ))
+
+        if benchmark_df is not None and not benchmark_df.empty:
+            label = "Benchmark"
+            if "label" in benchmark_df.columns and len(benchmark_df["label"].unique()) > 0:
+                label = str(benchmark_df["label"].iloc[0])
+            fig.add_trace(go.Scatter(
+                x=pd.to_datetime(benchmark_df[Columns.DATE]),
+                y=benchmark_df["benchmark_return_pct"],
+                mode="lines",
+                name=label,
+                hovertemplate="%{x|%Y-%m-%d}<br>Return: %{y:.2f}%<extra></extra>",
+            ))
+        if twr_pct is not None:
+            fig.add_hline(
+                y=float(twr_pct),
+                line_dash="dot",
+                annotation_text="TWR",
+            )
+        else:
+            print("No benchmark data to plot.")
+    else:
         fig.add_trace(go.Scatter(
-            x=pd.to_datetime(asset_df[Columns.DATE]),
-            y=asset_df[Columns.NET_VALUE],
+            x=x,
+            y=asset_df[Columns.MARKET_VALUE],
             mode="lines+markers",
-            name="Net Value",
-            hovertemplate="%{x|%Y-%m-%d}<br>Net: ¥%{y:,.0f}<extra></extra>",
+            name="Holdings Value",
+            hovertemplate="%{x|%Y-%m-%d}<br>Value: ¥%{y:,.0f}<extra></extra>",
         ))
 
-    if initial_capital is not None:
-        fig.add_hline(
-            y=float(initial_capital),
-            line_dash="dash",
-            annotation_text="Initial Capital",
-        )
+        if Columns.NET_VALUE in asset_df.columns:
+            fig.add_trace(go.Scatter(
+                x=x,
+                y=asset_df[Columns.NET_VALUE],
+                mode="lines+markers",
+                name="Net Value",
+                hovertemplate="%{x|%Y-%m-%d}<br>Net: ¥%{y:,.0f}<extra></extra>",
+            ))
 
-    base_layout(
-        fig,
-        title=UI.ASSET_GROWTH_TITLE,
-        x_title="Date",
-        y_title="Yen (¥)",
+        if net_deposit is not None:
+            fig.add_hline(
+                y=float(net_deposit),
+                line_dash="dash",
+                annotation_text="Initial Capital",
+            )
+
+    fig.update_layout(
+        template="plotly_white",
+        margin=dict(l=10, r=10, t=10, b=10),
+        xaxis_title="Date",
+        yaxis_title="Return (%)" if view_mode == "return" else "Yen (¥)",
+        legend_title="Metric",
     )
     return fig
 

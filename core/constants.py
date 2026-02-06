@@ -55,6 +55,11 @@ class KPI:
     TOTAL_PNL = "Total PnL"
     RETURN_PCT = "Return %"
     REALIZED_UNREALIZED = "Realized / Unrealized"
+    ACCOUNT_GROWTH = "Account Growth"
+    CAPITAL_RETURN = "Capital Return"
+    IRR = "IRR"
+    TWR = "TWR"
+    TWR_ANNUAL = "TWR / Ann."
 
 
 class PnLKind:
@@ -84,8 +89,13 @@ class UI:
     TOP_PNL_TITLE = "Top PnL"
     HOLDINGS_TITLE = "Holdings"
     ASSET_GROWTH_TITLE = "Asset Growth Over Time"
-    INITIAL_CAPITAL = "Initial Capital (¥)"
-    INITIAL_CAPITAL_PLACEHOLDER = "e.g., 3500000"
+    NET_DEPOSIT = "Net Deposit (¥)"
+    NET_DEPOSIT_PLACEHOLDER = "e.g., 3500000"
+    ASSET_TAB_VALUE = "Value"
+    ASSET_TAB_RETURN = "Return %"
+    BENCHMARK = "Benchmark"
+    BENCHMARK_NONE = "None"
+    BENCHMARK_SP500 = "S&P 500 (SPY)"
     STOCK_PERF_TITLE = "Stock Performance"
     TAB_REALIZED = "Realized PnL"
     TAB_TOTAL = "Total PnL"

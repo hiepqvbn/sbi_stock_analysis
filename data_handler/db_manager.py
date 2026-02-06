@@ -150,6 +150,14 @@ def clear_db(db_path="data/portfolio.db"):
     conn.close()
 
 
+def clear_cash_flows(db_path="data/portfolio.db"):
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    c.execute("DELETE FROM cash_flows")
+    conn.commit()
+    conn.close()
+
+
 def fetch_summary(db_path="data/portfolio.db"):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
@@ -166,6 +174,13 @@ def fetch_summary(db_path="data/portfolio.db"):
 def get_all_transactions(db_path="data/portfolio.db"):
     conn = sqlite3.connect(db_path)
     df = pd.read_sql_query("SELECT * FROM transactions", conn)
+    conn.close()
+    return df
+
+
+def get_cash_flows(db_path="data/portfolio.db"):
+    conn = sqlite3.connect(db_path)
+    df = pd.read_sql_query("SELECT * FROM cash_flows ORDER BY date DESC, id DESC", conn)
     conn.close()
     return df
 
@@ -267,13 +282,32 @@ def insert_dividends(df, db_path="data/portfolio.db"):
 def insert_cash_flows(df, db_path="data/portfolio.db"):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
+    def to_date_str(val):
+        if pd.isna(val):
+            return None
+        if isinstance(val, pd.Timestamp):
+            return val.strftime("%Y-%m-%d")
+        return str(val)
     for _, row in df.iterrows():
         try:
             c.execute("""
-                INSERT INTO cash_flows (date, type, amount, currency, notes)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO cash_flows (
+                    date, type, amount, currency, notes,
+                    category, description, debit, credit, transfer_debit, transfer_credit, source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                row["date"], row["type"], row["amount"], row.get("currency", "JPY"), row.get("notes", "")
+                to_date_str(row["date"]),
+                row.get("type"),
+                row.get("amount"),
+                row.get("currency", "JPY"),
+                row.get("notes", ""),
+                row.get("category"),
+                row.get("description"),
+                row.get("debit"),
+                row.get("credit"),
+                row.get("transfer_debit"),
+                row.get("transfer_credit"),
+                row.get("source"),
             ))
         except sqlite3.IntegrityError:
             continue

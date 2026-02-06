@@ -142,12 +142,13 @@ def get_layout() -> html.Div:
                     ),
                     html.Div(
                         [
-                            html.Div(UI.INITIAL_CAPITAL, style={"marginBottom": "6px"}),
+                            html.Div(UI.NET_DEPOSIT, style={
+                                     "marginBottom": "6px"}),
                             dcc.Input(
                                 id="dashboard-initial-capital",
                                 type="number",
                                 value=3500000,
-                                placeholder=UI.INITIAL_CAPITAL_PLACEHOLDER,
+                                placeholder=UI.NET_DEPOSIT_PLACEHOLDER,
                                 style={"width": "180px"},
                             ),
                         ],
@@ -171,25 +172,184 @@ def get_layout() -> html.Div:
             # =========================
             html.Div(
                 [
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                "Net vs Target",
+                                                style={"fontSize": "12px", "opacity": "0.7"},
+                                            ),
+                                            html.Div(
+                                                id="dashboard-net-bar-label",
+                                                style={"fontWeight": "600"},
+                                            ),
+                                        ],
+                                        style={"display": "flex", "flexDirection": "column", "gap": "4px"},
+                                    ),
+                                    html.Div(
+                                        [
+                                            dcc.Input(
+                                                id="dashboard-target-net",
+                                                type="number",
+                                                value=5000000,
+                                                placeholder="Target net (¥)",
+                                                style={"width": "160px"},
+                                            ),
+                                            dcc.Input(
+                                                id="dashboard-net-icon-input",
+                                                type="text",
+                                                value="📍",
+                                                placeholder="Net icon",
+                                                style={"width": "80px"},
+                                            ),
+                                            dcc.Input(
+                                                id="dashboard-goal-icon-input",
+                                                type="text",
+                                                value="🏁",
+                                                placeholder="Goal icon",
+                                                style={"width": "80px"},
+                                            ),
+                                        ],
+                                        style={"display": "flex", "gap": "8px", "alignItems": "center"},
+                                    ),
+                                ],
+                                style={
+                                    "display": "flex",
+                                    "justifyContent": "space-between",
+                                    "alignItems": "center",
+                                    "gap": "12px",
+                                },
+                            ),
+                            html.Div(
+                                [
+                                    html.Div(
+                                        id="dashboard-net-bar-fill",
+                                        style={
+                                            "height": "100%",
+                                            "width": "0%",
+                                            "background": "#2b6cb0",
+                                            "borderRadius": "999px",
+                                        },
+                                    ),
+                                    html.Div(
+                                        id="dashboard-net-icon",
+                                        style={
+                                            "position": "absolute",
+                                            "top": "-18px",
+                                            "left": "0%",
+                                            "transform": "translateX(-50%)",
+                                            "fontSize": "18px",
+                                            "zIndex": 2,
+                                            "pointerEvents": "none",
+                                        },
+                                    ),
+                                    html.Div(
+                                        id="dashboard-goal-icon",
+                                        style={
+                                            "position": "absolute",
+                                            "top": "-12px",
+                                            "right": "0%",
+                                            "transform": "translateX(50%)",
+                                            "fontSize": "18px",
+                                        },
+                                    ),
+                                ],
+                                style={
+                                    "position": "relative",
+                                    "height": "14px",
+                                    "background": "#e6eef7",
+                                    "borderRadius": "999px",
+                                    "overflow": "visible",
+                                    "marginTop": "8px",
+                                },
+                            ),
+                        ],
+                        style=_panel_style(),
+                    ),
+                ],
+                style={"marginBottom": "16px"},
+            ),
+            html.Div(
+                [
                     _kpi_card(KPI.MARKET_VALUE,
                               "dashboard-kpi-market-value", "¥0"),
                     _kpi_card(KPI.TOTAL_PNL, "dashboard-kpi-total-pnl", "¥0"),
-                    _kpi_card(KPI.RETURN_PCT,
-                              "dashboard-kpi-return-pct", "0.00%"),
+                    _kpi_card("Account Growth / Capital Return",
+                              "dashboard-kpi-return-pct", "0.00% / 0.00%"),
+                    _kpi_card(KPI.IRR, "dashboard-kpi-irr", "0.00%"),
+                    _kpi_card(KPI.TWR_ANNUAL, "dashboard-kpi-twr", "0.00% / 0.00%"),
                     _kpi_card(KPI.REALIZED_UNREALIZED,
                               "dashboard-kpi-split", "¥0 / ¥0"),
                 ],
                 style={
                     "display": "grid",
-                    "gridTemplateColumns": "repeat(4, minmax(0, 1fr))",
+                    "gridTemplateColumns": "repeat(6, minmax(0, 1fr))",
                     "gap": "12px",
                     "marginBottom": "16px",
                 },
             ),
 
             # =========================
-            # Charts Rows   
+            # Charts Rows
             # =========================
+            # figure: Asset Growth Over Time
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.H4(UI.ASSET_GROWTH_TITLE, style={"margin": "0 0 8px 0"}),
+                            dcc.Tabs(
+                                id="dashboard-asset-view",
+                                value="value",
+                                children=[
+                                    dcc.Tab(label=UI.ASSET_TAB_VALUE, value="value"),
+                                    dcc.Tab(label=UI.ASSET_TAB_RETURN, value="return"),
+                                ],
+                                style={"marginBottom": "8px"},
+                            ),
+                            html.Div(
+                                [
+                                    dcc.Graph(
+                                        id="dashboard-fig-asset-growth",
+                                        figure={},
+                                        config={"displayModeBar": False},
+                                        style={"height": "440px", "flex": "1", "minWidth": "0"},
+                                    ),
+                                    html.Div(
+                                        [
+                                            html.Div(UI.BENCHMARK, style={"marginBottom": "6px"}),
+                                            dcc.Dropdown(
+                                                id="dashboard-benchmark",
+                                                options=[
+                                                    {"label": UI.BENCHMARK_NONE, "value": ""},
+                                                    {"label": UI.BENCHMARK_SP500, "value": "^GSPC"},
+                                                ],
+                                                value="",
+                                                clearable=False,
+                                                style={"width": "220px"},
+                                            ),
+                                        ],
+                                        id="dashboard-benchmark-container",
+                                        style={"minWidth": "240px"},
+                                    ),
+                                ],
+                                style={
+                                    "display": "flex",
+                                    "gap": "12px",
+                                    "alignItems": "stretch",
+                                    "width": "100%",
+                                },
+                            ),
+                        ],
+                        style=_panel_style(),
+                    ),
+                ],
+                style={"marginBottom": "16px"},
+            ),
+            # figure: Allocation Pie & Top PnL Bar
             html.Div(
                 [
                     html.Div(
@@ -214,12 +374,12 @@ def get_layout() -> html.Div:
                                 options=[
                                     {"label": UI.PNL_KIND_TOTAL,
                                         "value": PnLKind.TOTAL},
-                                    {"label": UI.PNL_KIND_UNREALIZED,
-                                        "value": PnLKind.UNREALIZED},
                                     {"label": UI.PNL_KIND_REALIZED,
                                         "value": PnLKind.REALIZED},
+                                    {"label": UI.PNL_KIND_UNREALIZED,
+                                        "value": PnLKind.UNREALIZED},
                                 ],
-                                value=PnLKind.UNREALIZED,
+                                value=PnLKind.TOTAL,
                                 clearable=False,
                                 style={"marginBottom": "8px"},
                             ),
@@ -240,35 +400,19 @@ def get_layout() -> html.Div:
                     "marginBottom": "16px",
                 },
             ),
-            # figure: Asset Growth Over Time
+            # figure: Stock Performance
             html.Div(
                 [
                     html.Div(
                         [
-                            html.H4(UI.ASSET_GROWTH_TITLE, style={
+                            html.H4(UI.STOCK_PERF_TITLE, style={
                                     "margin": "0 0 8px 0"}),
-                            dcc.Graph(
-                                id="dashboard-fig-asset-growth",
-                                figure={},
-                                config={"displayModeBar": False},
-                                style={"height": "360px"},
-                            ),
-                        ],
-                        style=_panel_style(),
-                    ),
-                ],
-                style={"marginBottom": "16px"},
-            ),
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.H4(UI.STOCK_PERF_TITLE, style={"margin": "0 0 8px 0"}),
                             dcc.Tabs(
                                 id="dashboard-stock-perf-tab",
                                 value="realized",
                                 children=[
-                                    dcc.Tab(label=UI.TAB_REALIZED, value="realized"),
+                                    dcc.Tab(label=UI.TAB_REALIZED,
+                                            value="realized"),
                                     dcc.Tab(label=UI.TAB_TOTAL, value="total"),
                                 ],
                                 style={"marginBottom": "8px"},
